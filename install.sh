@@ -109,6 +109,9 @@ if [ "$MENUBAR" = 1 ]; then
   plugins="$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || true)"
   if [ -z "$plugins" ]; then
     plugins="$DEST/menubar"
+    # A running SwiftBar keeps the old folder and may write it back on quit.
+    osascript -e 'quit app "SwiftBar"' 2>/dev/null || true
+    while pgrep -xq SwiftBar; do sleep 0.5; done
     defaults write com.ameba.SwiftBar PluginDirectory "$plugins"
   fi
   mkdir -p "$plugins"
