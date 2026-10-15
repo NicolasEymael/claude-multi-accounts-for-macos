@@ -12,6 +12,7 @@ itself with a one-word Haiku call, at most once every 30 min per account.
 """
 import base64
 import datetime as dt
+import getpass
 import json
 import struct
 import subprocess
@@ -74,7 +75,9 @@ def renew(cfg, acc):
         return
     STATE.mkdir(parents=True, exist_ok=True)
     stamp.touch()
-    env = {"PATH": "/usr/bin:/bin", "HOME": str(Path.home())}
+    # The CLI looks its credentials up in the Keychain by $USER; without it, it reports "Not logged in".
+    user = getpass.getuser()
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(Path.home()), "USER": user, "LOGNAME": user}
     if acc.get("config_dir"):
         env["CLAUDE_CONFIG_DIR"] = acc["config_dir"]
     try:
