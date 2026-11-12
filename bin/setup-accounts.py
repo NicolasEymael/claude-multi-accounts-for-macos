@@ -85,9 +85,6 @@ def discover():
             "letter": "",
             "config_dir": str(config_dir) if config_dir else None,
             "keychain_service": service,
-            # The menu bar refuses to show usage when this config dir is later logged into another account.
-            "account_uuid": acc["accountUuid"],
-            "organization_uuid": acc.get("organizationUuid"),
         })
 
     used = set()
