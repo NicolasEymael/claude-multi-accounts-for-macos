@@ -66,6 +66,35 @@ def token(service):
     return data.get("accessToken"), data.get("expiresAt", 0) / 1000
 
 
+def logged_in_as(acc):
+    """oauthAccount the CLI recorded at its last login in this config dir (metadata only)."""
+    path = Path(acc["config_dir"]) / ".claude.json" if acc.get("config_dir") else Path.home() / ".claude.json"
+    try:
+        return json.loads(path.read_text()).get("oauthAccount") or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def wrong_account(acc):
+    """Who is logged in instead, when that is not the account this row was set up for."""
+    who = logged_in_as(acc)
+    for key, field in (("account_uuid", "accountUuid"), ("organization_uuid", "organizationUuid")):
+        if acc.get(key) and who.get(field) and acc[key] != who[field]:
+            org = who.get("organizationName") or ""
+            return who.get("emailAddress") if not org or org.endswith("'s Organization") else org
+    return None
+
+
+def login_action(cfg, acc):
+    """SwiftBar params that open Terminal on `claude auth login` for this account's config dir."""
+    args = ["/usr/bin/env"]
+    if acc.get("config_dir"):
+        args.append(f"CLAUDE_CONFIG_DIR={acc['config_dir']}")
+    args += [cfg.get("claude_bin") or "claude", "auth", "login"]
+    params = " ".join(f'param{i}="{a}"' for i, a in enumerate(args[1:], 1))
+    return f'bash="{args[0]}" {params} terminal=true refresh=true'
+
+
 def renew(cfg, acc):
     """Let the CLI refresh its own token through a minimal request."""
     if not cfg.get("auto_renew") or not cfg.get("claude_bin"):
@@ -95,27 +124,33 @@ def usage(tok):
 
 
 def fetch(cfg, acc):
+    """(usage, note, needs_login). A login in another account never shows that account's usage."""
+    other = wrong_account(acc)
+    if other:
+        return None, f"o CLI desta conta está logado em {other}", True
     cache = STATE / f"usage-{acc['letter']}.json"
     if cache.exists() and time.time() - cache.stat().st_mtime < CACHE_FRESH:
-        return json.loads(cache.read_text()), None
+        return json.loads(cache.read_text()), None, False
     tok, exp = token(acc["keychain_service"])
     if not tok:
-        return None, "sem login no Claude Code (rode o setup de novo)"
+        return None, "sem login no Claude Code", True
     if exp < time.time() + 60:
         renew(cfg, acc)
         tok, exp = token(acc["keychain_service"])
+        if not tok:
+            return None, "a renovação perdeu o login", True
         if exp < time.time():
-            return None, "token expirado: abra o claude dessa conta no terminal"
+            return None, "token expirado", True
     try:
         data = usage(tok)
         STATE.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(data))
-        return data, None
+        return data, None, False
     except Exception as e:
         if cache.exists():  # e.g. HTTP 429: show the last good reading instead of nothing
             age = time.strftime("%H:%M", time.localtime(cache.stat().st_mtime))
-            return json.loads(cache.read_text()), f"leitura de {age}"
-        return None, f"erro: {e}"
+            return json.loads(cache.read_text()), f"leitura de {age}", False
+        return None, f"erro: {e}", False
 
 
 def when(iso):
@@ -206,11 +241,13 @@ def main():
     body, groups = [], []
     for acc in cfg.get("accounts", []):
         letter = acc["letter"].upper()[:1] or "?"
-        data, err = fetch(cfg, acc)
+        data, err, needs_login = fetch(cfg, acc)
         body.append(f"{acc['label']} | size=14 refresh=true")
         if not data:
             groups.append((letter, None, None))
             body.append(f"{err} | color={MUTED} refresh=true")
+            if needs_login:
+                body.append(f"Entrar nesta conta no Terminal… | {login_action(cfg, acc)}")
             body.append("---")
             continue
         s = data.get("five_hour") or {}

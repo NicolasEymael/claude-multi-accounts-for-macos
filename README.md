@@ -35,6 +35,8 @@ No menu bar, cada conta aparece como uma letra com duas barrinhas: **sessão em 
 
 Para trocar a letra ou o nome de uma conta, edite `~/.claude-multi-accounts/accounts.json`.
 
+Cada conta guarda no `accounts.json` o `account_uuid` e o `organization_uuid` do login que o setup encontrou. Se depois o diretório daquela conta for logado em outra conta (um `claude auth login` no diretório errado, por exemplo), a linha avisa em qual conta ele está e não mostra o uso da outra. Quando falta login, o menu tem **Entrar nesta conta no Terminal…**, que abre o `claude auth login` no diretório certo. Instalações anteriores não têm esses campos: rode `~/.claude-multi-accounts/install.sh --reconfigure` com cada conta logada no diretório certo.
+
 ## Como funciona
 
 **Sessões.** O histórico de cada conversa fica em `~/.claude/projects/` e não depende de conta. O que é por conta é a lista da aba Code, em `~/Library/Application Support/Claude/claude-code-sessions/<conta>/<organização>/`. Um agente do `launchd` espelha essa lista entre as pastas de todas as contas: a cada mudança e a cada 30 s, o arquivo mais novo vence. Só a pasta da conta ativa muda, então a das outras já está em dia quando você troca.
